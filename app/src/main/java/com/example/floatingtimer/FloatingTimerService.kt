@@ -10,8 +10,13 @@ import android.media.ToneGenerator
 import android.os.*
 import android.util.DisplayMetrics
 import android.view.*
+import android.view.animation.*
+import android.widget.FrameLayout
+import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
+import androidx.appcompat.view.ContextThemeWrapper
 import androidx.core.app.NotificationCompat
 import kotlin.math.abs
 
@@ -21,11 +26,14 @@ class FloatingTimerService : Service() {
     private lateinit var prefs: PreferencesManager
 
     private var floatingView: View? = null
+    private var flBallContainer: FrameLayout? = null
     private var tvTimer: TextView? = null
+    private var pbRing: ProgressBar? = null
     private var vDocked: View? = null
     private var params: WindowManager.LayoutParams? = null
 
     // 倒计时逻辑
+    private var totalSeconds = 0
     private var remainingSeconds = 0
     private var countDownTimer: CountDownTimer? = null
 
@@ -65,7 +73,7 @@ class FloatingTimerService : Service() {
         when (intent?.action) {
             ACTION_STOP_ALARM -> stopAlarm()
             ACTION_UPDATE_PREFS -> {
-                // Preferences updated
+                updateVisualPrefs()
             }
         }
         return START_STICKY
@@ -86,7 +94,9 @@ class FloatingTimerService : Service() {
     private fun initFloatingWindow() {
         try {
             floatingView = LayoutInflater.from(this).inflate(R.layout.layout_floating_ball, null)
+            flBallContainer = floatingView?.findViewById(R.id.fl_ball_container)
             tvTimer = floatingView?.findViewById(R.id.tv_timer)
+            pbRing = floatingView?.findViewById(R.id.pb_ring)
             vDocked = floatingView?.findViewById(R.id.v_docked)
 
             val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -116,6 +126,21 @@ class FloatingTimerService : Service() {
             AppLogger.e("FloatingTimerService", "Failed to init floating window", e)
         }
         updateTimerDisplay()
+        updateVisualPrefs()
+    }
+
+    private fun updateVisualPrefs() {
+        if (prefs.showProgressRing && remainingSeconds > 0) {
+            pbRing?.visibility = View.VISIBLE
+        } else {
+            pbRing?.visibility = View.GONE
+        }
+
+        if (prefs.changeColorOnTimer && remainingSeconds > 0) {
+            tvTimer?.setBackgroundResource(R.drawable.bg_floating_ball_active)
+        } else {
+            tvTimer?.setBackgroundResource(R.drawable.bg_floating_ball)
+        }
     }
 
     private fun safeUpdateViewLayout() {
@@ -251,7 +276,7 @@ class FloatingTimerService : Service() {
             AppLogger.log("FloatingTimerService", "dockFloatingBall isLeft=$isLeft")
             isDocked = true
             isDockedOnLeft = isLeft
-            tvTimer?.visibility = View.GONE
+            flBallContainer?.visibility = View.GONE
             vDocked?.visibility = View.VISIBLE
 
             vDocked?.setBackgroundResource(
@@ -273,7 +298,7 @@ class FloatingTimerService : Service() {
             AppLogger.log("FloatingTimerService", "undockFloatingBall triggered")
             isDocked = false
             vDocked?.visibility = View.GONE
-            tvTimer?.visibility = View.VISIBLE
+            flBallContainer?.visibility = View.VISIBLE
 
             params?.let { p ->
                 val ballSizePx = dpToPx(56)
@@ -292,8 +317,10 @@ class FloatingTimerService : Service() {
     private fun onBallClicked() {
         val step = prefs.selectedStep
         remainingSeconds += step
+        totalSeconds += step
         AppLogger.log("FloatingTimerService", "onBallClicked add ${step}s, total=$remainingSeconds")
         updateTimerDisplay()
+        updateVisualPrefs()
         startOrRestartTimer()
     }
 
@@ -308,7 +335,9 @@ class FloatingTimerService : Service() {
 
             override fun onFinish() {
                 remainingSeconds = 0
+                totalSeconds = 0
                 updateTimerDisplay()
+                updateVisualPrefs()
                 onTimerFinished()
             }
         }.start()
@@ -316,12 +345,28 @@ class FloatingTimerService : Service() {
 
     private fun updateTimerDisplay() {
         tvTimer?.text = remainingSeconds.toString()
+        if (totalSeconds > 0 && prefs.showProgressRing) {
+            pbRing?.visibility = View.VISIBLE
+            val pct = (remainingSeconds.toFloat() / totalSeconds * 100).toInt()
+            pbRing?.progress = pct
+        } else {
+            pbRing?.visibility = View.GONE
+        }
     }
 
     private fun onTimerFinished() {
         AppLogger.log("FloatingTimerService", "onTimerFinished triggered")
+
+        if (prefs.shakeEnable) {
+            triggerShakeAnimation()
+        }
+
+        if (prefs.flashEnable) {
+            triggerFlashAnimation()
+        }
+
         if (prefs.vibrateEnable) {
-            triggerVibration(prefs.vibrateDuration.toLong())
+            triggerVibration(prefs.vibrateDuration.toLong(), prefs.vibrateIntensity)
         }
 
         if (prefs.ringtoneEnable) {
@@ -332,10 +377,42 @@ class FloatingTimerService : Service() {
         notifManager.notify(NOTIF_ID, buildNotification("倒计时结束！", showStopAction = prefs.allowNotifStop))
     }
 
-    private fun triggerVibration(durationMs: Long) {
+    private fun triggerShakeAnimation() {
+        try {
+            val amplitude = dpToPx(prefs.shakeAmplitude)
+            val duration = prefs.shakeDuration.toLong()
+
+            val rotate = TranslateAnimation(
+                -amplitude.toFloat(), amplitude.toFloat(), 0f, 0f
+            ).apply {
+                this.duration = 50
+                repeatCount = (duration / 50).toInt()
+                repeatMode = Animation.REVERSE
+            }
+            flBallContainer?.startAnimation(rotate)
+        } catch (e: Exception) {
+            AppLogger.e("FloatingTimerService", "Exception in triggerShakeAnimation", e)
+        }
+    }
+
+    private fun triggerFlashAnimation() {
+        try {
+            val alphaAnim = AlphaAnimation(0.2f, 1.0f).apply {
+                duration = 150
+                repeatCount = 5
+                repeatMode = Animation.REVERSE
+            }
+            flBallContainer?.startAnimation(alphaAnim)
+        } catch (e: Exception) {
+            AppLogger.e("FloatingTimerService", "Exception in triggerFlashAnimation", e)
+        }
+    }
+
+    private fun triggerVibration(durationMs: Long, intensity: Int) {
         val v = vibrator ?: return
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            v.vibrate(VibrationEffect.createOneShot(durationMs, VibrationEffect.DEFAULT_AMPLITUDE))
+            val effect = VibrationEffect.createOneShot(durationMs, intensity.coerceIn(1, 255))
+            v.vibrate(effect)
         } else {
             @Suppress("DEPRECATION")
             v.vibrate(durationMs)
@@ -379,7 +456,8 @@ class FloatingTimerService : Service() {
             val labels = steps.map { "${it}秒" }.toMutableList()
             labels.add("⚙️ 打开设置")
 
-            val builder = AlertDialog.Builder(this)
+            val themedContext = ContextThemeWrapper(this, androidx.appcompat.R.style.Theme_AppCompat_DayNight_Dialog)
+            val builder = AlertDialog.Builder(themedContext)
                 .setTitle("选择加时额度 (当前: ${prefs.selectedStep}s)")
                 .setItems(labels.toTypedArray()) { dialog, which ->
                     if (which == steps.size) {
@@ -388,7 +466,9 @@ class FloatingTimerService : Service() {
                         }
                         startActivity(intent)
                     } else {
-                        prefs.selectedStep = steps[which]
+                        val newStep = steps[which]
+                        prefs.selectedStep = newStep
+                        Toast.makeText(this, "已切换加时额度为 ${newStep}s", Toast.LENGTH_SHORT).show()
                     }
                     dialog.dismiss()
                 }
@@ -403,6 +483,7 @@ class FloatingTimerService : Service() {
             alertDialog.show()
         } catch (e: Exception) {
             AppLogger.e("FloatingTimerService", "Exception in showPresetOptionDialog", e)
+            Toast.makeText(this, "长按菜单加载失败", Toast.LENGTH_SHORT).show()
         }
     }
 
