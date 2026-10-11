@@ -37,3 +37,19 @@ FloatingTimer 是一款轻量、自定义度高的 Android 悬浮倒计时助手
 本项目已配置 **GitHub Actions** 工作流（`.github/workflows/build.yml`）：
 - 每次 `push` 代码至 `main` 或 `master` 分支时自动触发构建。
 - 自动使用 Gradle 编译 Debug 与 Release APK，并自动创建 GitHub Release 上传 `FloatingTimer.apk` 作为 Release Asset。
+
+---
+
+## ⚙️ GitHub 仓库 Releases 权限配置指南 (解决 403 报错)
+
+GitHub 仓库默认对 GitHub Actions 自动生成的 `GITHUB_TOKEN` 限制为只读权限（Read repository contents），因此自动创建 Release 会触发 `Resource not accessible by integration (403)` 错误。
+
+请按以下步骤开启仓库写权限：
+1. 打开您的 GitHub 仓库 `jiafjioajfijaiofnkan/floatingtimer`。
+2. 进入 **Settings** -> **Actions** -> **General**。
+3. 滚动到页面底部的 **Workflow permissions** 区域。
+4. 将选项从默认的 *Read repository contents permission* 切换为 **Read and write permissions**。
+5. 勾选下方 **Allow GitHub Actions to create and approve pull requests**（可选）。
+6. 点击 **Save** 保存设置。
+
+保存后，后续每次 Commit/Push 构建均可成功在 Releases 页面生成对应版本的 Tag & Release Asset！
