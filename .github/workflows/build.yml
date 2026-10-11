@@ -1,0 +1,67 @@
+name: Android CI & Release
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew || true
+
+      - name: Build Debug and Release APKs
+        run: ./gradlew assembleDebug assembleRelease -x test --stacktrace
+
+      - name: Copy generated APKs
+        run: |
+          mkdir -p output_apks
+          if [ -f "app/build/outputs/apk/release/app-release.apk" ]; then
+            cp app/build/outputs/apk/release/app-release.apk output_apks/FloatingTimer.apk
+            cp app/build/outputs/apk/release/app-release.apk output_apks/app-release.apk
+          fi
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk output_apks/app-debug.apk
+            if [ ! -f "output_apks/FloatingTimer.apk" ]; then
+              cp app/build/outputs/apk/debug/app-debug.apk output_apks/FloatingTimer.apk
+            fi
+          fi
+
+      - name: Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: FloatingTimer-APKs
+          path: output_apks/*
+
+      - name: Create or Update Release
+        uses: softprops/action-gh-release@v2
+        if: success()
+        with:
+          tag_name: "v1.0.${{ github.run_number }}"
+          name: "FloatingTimer Release v1.0.${{ github.run_number }}"
+          body: |
+            ## FloatingTimer 自动构建发布
+            - 触发 Commit: `${{ github.sha }}`
+            - 分支: `${{ github.ref_name }}`
+            - 包含软件功能：悬浮球倒计时、贴边隐藏/拉出、短按叠加倒计时、长按额度菜单、自定义蜂鸣/震动/抖动/闪烁提醒、离线日志管理。
+          files: |
+            output_apks/FloatingTimer.apk
+            output_apks/app-release.apk
+            output_apks/app-debug.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
