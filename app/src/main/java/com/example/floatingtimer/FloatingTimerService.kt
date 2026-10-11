@@ -462,20 +462,27 @@ class FloatingTimerService : Service() {
             val steps = prefs.stepList
             val labels = steps.map { "${it}秒" }.toMutableList()
             labels.add("⚙️ 打开设置")
+            labels.add("❌ 关闭悬浮球")
 
             val themedContext = ContextThemeWrapper(this, androidx.appcompat.R.style.Theme_AppCompat_DayNight_Dialog)
             val builder = AlertDialog.Builder(themedContext)
                 .setTitle("选择加时额度 (当前: ${prefs.selectedStep}s)")
                 .setItems(labels.toTypedArray()) { dialog, which ->
-                    if (which == steps.size) {
-                        val intent = Intent(this, MainActivity::class.java).apply {
-                            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                    when (which) {
+                        steps.size -> {
+                            val intent = Intent(this, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
+                            }
+                            startActivity(intent)
                         }
-                        startActivity(intent)
-                    } else {
-                        val newStep = steps[which]
-                        prefs.selectedStep = newStep
-                        Toast.makeText(this, "已切换加时额度为 ${newStep}s", Toast.LENGTH_SHORT).show()
+                        steps.size + 1 -> {
+                            showCloseConfirmDialog()
+                        }
+                        else -> {
+                            val newStep = steps[which]
+                            prefs.selectedStep = newStep
+                            Toast.makeText(this, "已切换加时额度为 ${newStep}s", Toast.LENGTH_SHORT).show()
+                        }
                     }
                     dialog.dismiss()
                 }
@@ -491,6 +498,33 @@ class FloatingTimerService : Service() {
         } catch (e: Exception) {
             AppLogger.e("FloatingTimerService", "Exception in showPresetOptionDialog", e)
             Toast.makeText(this, "长按菜单加载失败", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun showCloseConfirmDialog() {
+        try {
+            val themedContext = ContextThemeWrapper(this, androidx.appcompat.R.style.Theme_AppCompat_DayNight_Dialog)
+            val confirmDialog = AlertDialog.Builder(themedContext)
+                .setTitle("关闭确认")
+                .setMessage("确定要关闭并退出悬浮球服务吗？")
+                .setPositiveButton("确定关闭") { dialog, _ ->
+                    dialog.dismiss()
+                    stopSelf()
+                }
+                .setNegativeButton("取消") { dialog, _ ->
+                    dialog.dismiss()
+                }
+                .create()
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                confirmDialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            } else {
+                @Suppress("DEPRECATION")
+                confirmDialog.window?.setType(WindowManager.LayoutParams.TYPE_PHONE)
+            }
+            confirmDialog.show()
+        } catch (e: Exception) {
+            AppLogger.e("FloatingTimerService", "Exception in showCloseConfirmDialog", e)
         }
     }
 
