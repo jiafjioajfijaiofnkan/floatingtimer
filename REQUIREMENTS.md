@@ -16,7 +16,8 @@ FloatingTimer 是一款运行在 Android 系统上的悬浮倒计时助手应用
 1. **形态与显示**：
    - 空闲与计时状态下均呈半透明圆形悬浮球，置顶显示在所有应用上层 (`TYPE_APPLICATION_OVERLAY`)。
    - 悬浮球中央实时以数字形式显示剩余倒计时秒数（例如 `15` 或 `30`）。
-   - 计时进行中悬浮球呈现高亮视觉区分（如高亮背景/环形进度条）。
+   - **环形进度条 (ProgressBar Ring)**：设置中开启后，悬浮球外圈展示倒计时进度圆环，随剩余时间减少递减。
+   - **高亮背景**：设置中开启后，倒计时进行中悬浮球背景变为高亮粉色（`bg_floating_ball_active`）。
 2. **短按 (Single Tap)**：
    - 点击悬浮球即刻开启倒计时，并累加当前选定的单次加时额度（无防抖延时）。
    - 若倒计时正在进行中，再次短按继续叠加设定额度（如当前剩余 10s，再次点击 15s 额度，变为 25s）。
@@ -39,11 +40,11 @@ FloatingTimer 是一款运行在 Android 系统上的悬浮倒计时助手应用
 
 ### 2.3 倒计时完成提醒 (Completion Alerts)
 1. **声音提醒 (Beep Ringtone)**：
-   - 可独立开启/关闭。提供标准 Beep 蜂鸣音，可自定义响铃时长（如 0.5s、1.0s）与音量。
+   - 可独立开启/关闭。提供标准 Beep 蜂鸣音，可自定义响铃时长（0.5s / 1.0s）与音量。
 2. **震动提醒 (Vibration)**：
-   - 可独立开启/关闭。可自定义震动时长与震动模式。
+   - 可独立开启/关闭。可自定义震动时长与震动强度。
 3. **视觉提醒 (Shake / Flash Animation)**：
-   - **抖动 (Shake)**：倒计时归零时悬浮球进行高频左右/上下平移抖动动画。
+   - **抖动 (Shake)**：倒计时归零时悬浮球进行高频左右平移抖动动画。
    - **闪烁 (Flash)**：倒计时归零时悬浮球背景高亮闪烁。
 4. **自动与手动停止**：
    - 提醒在到达设定的时长后**自动停止**。
@@ -67,8 +68,10 @@ FloatingTimer 是一款运行在 Android 系统上的悬浮倒计时助手应用
 
 1. **触发条件**：
    - 每次 `push` 代码至 `main` 或 `master` 分支时自动触发 GitHub Actions 工作流构建。
-2. **构建流程**：
+2. **权限要求**：
+   - 工作流声明 `permissions: contents: write` 确保发布 Release 时拥有 GitHub Token 的写权限。
+3. **构建流程**：
    - 配置 JDK 17 环境。
-   - 执行 `./gradlew assembleDebug` 与 `./gradlew assembleRelease` 构建 Debug 与 Release 版本 APK（使用 Android 默认及生成的 debug/release 密钥签名，跳过单测）。
-3. **发布产物 (Release Asset)**：
+   - 执行 `./gradlew assembleDebug assembleRelease -x test` 构建 Debug 与 Release 版本 APK（使用 Android 默认及生成的 debug/release 密钥签名）。
+4. **发布产物 (Release Asset)**：
    - 自动在 GitHub 上创建/更新 Release，并将生成的 `FloatingTimer.apk` (Release / Debug APK) 上传为 Release Asset 以及 Workflow Artifact 供直接点击下载。

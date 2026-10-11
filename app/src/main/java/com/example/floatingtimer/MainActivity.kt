@@ -27,22 +27,27 @@ class MainActivity : AppCompatActivity() {
     private lateinit var btnClearLogs: Button
 
     private lateinit var rgTheme: RadioGroup
+    private lateinit var cbShowRing: CheckBox
+    private lateinit var cbChangeColor: CheckBox
+
     private lateinit var rgStep: RadioGroup
     private lateinit var etCustomStep: EditText
     private lateinit var btnAddStep: Button
     private lateinit var btnDeleteStep: Button
 
+    private lateinit var cbShake: CheckBox
+    private lateinit var cbFlash: CheckBox
+
     private lateinit var cbVibrate: CheckBox
     private lateinit var tvVibrateDuration: TextView
     private lateinit var sbVibrateDuration: SeekBar
-    private lateinit var btnTestVibrate: Button
 
     private lateinit var cbRingtone: CheckBox
     private lateinit var rgBeepDuration: RadioGroup
     private lateinit var tvBeepVolume: TextView
     private lateinit var sbBeepVolume: SeekBar
-    private lateinit var btnTestBeep: Button
 
+    private lateinit var btnTestAll: Button
     private lateinit var cbAllowNotifStop: CheckBox
 
     private var vibrator: Vibrator? = null
@@ -81,22 +86,27 @@ class MainActivity : AppCompatActivity() {
         btnClearLogs = findViewById(R.id.btn_clear_logs)
 
         rgTheme = findViewById(R.id.rg_theme)
+        cbShowRing = findViewById(R.id.cb_show_ring)
+        cbChangeColor = findViewById(R.id.cb_change_color)
+
         rgStep = findViewById(R.id.rg_step)
         etCustomStep = findViewById(R.id.et_custom_step)
         btnAddStep = findViewById(R.id.btn_add_step)
         btnDeleteStep = findViewById(R.id.btn_delete_step)
 
+        cbShake = findViewById(R.id.cb_shake)
+        cbFlash = findViewById(R.id.cb_flash)
+
         cbVibrate = findViewById(R.id.cb_vibrate)
         tvVibrateDuration = findViewById(R.id.tv_vibrate_duration)
         sbVibrateDuration = findViewById(R.id.sb_vibrate_duration)
-        btnTestVibrate = findViewById(R.id.btn_test_vibrate)
 
         cbRingtone = findViewById(R.id.cb_ringtone)
         rgBeepDuration = findViewById(R.id.rg_beep_duration)
         tvBeepVolume = findViewById(R.id.tv_beep_volume)
         sbBeepVolume = findViewById(R.id.sb_beep_volume)
-        btnTestBeep = findViewById(R.id.btn_test_beep)
 
+        btnTestAll = findViewById(R.id.btn_test_all)
         cbAllowNotifStop = findViewById(R.id.cb_allow_notif_stop)
     }
 
@@ -115,7 +125,13 @@ class MainActivity : AppCompatActivity() {
             else -> findViewById<RadioButton>(R.id.rb_theme_system).isChecked = true
         }
 
+        cbShowRing.isChecked = prefs.showProgressRing
+        cbChangeColor.isChecked = prefs.changeColorOnTimer
+
         renderStepRadioButtons()
+
+        cbShake.isChecked = prefs.shakeEnable
+        cbFlash.isChecked = prefs.flashEnable
 
         cbVibrate.isChecked = prefs.vibrateEnable
         val vibDur = prefs.vibrateDuration
@@ -176,6 +192,16 @@ class MainActivity : AppCompatActivity() {
                 prefs.themeMode = mode
                 applyTheme(mode)
             }
+        }
+
+        cbShowRing.setOnCheckedChangeListener { _, isChecked ->
+            prefs.showProgressRing = isChecked
+            notifyServiceUpdate()
+        }
+
+        cbChangeColor.setOnCheckedChangeListener { _, isChecked ->
+            prefs.changeColorOnTimer = isChecked
+            notifyServiceUpdate()
         }
 
         btnRequestPerm.setOnClickListener {
@@ -248,6 +274,16 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, "已移除 ${currentSelected}s 额度", Toast.LENGTH_SHORT).show()
         }
 
+        cbShake.setOnCheckedChangeListener { _, isChecked ->
+            prefs.shakeEnable = isChecked
+            notifyServiceUpdate()
+        }
+
+        cbFlash.setOnCheckedChangeListener { _, isChecked ->
+            prefs.flashEnable = isChecked
+            notifyServiceUpdate()
+        }
+
         cbVibrate.setOnCheckedChangeListener { _, isChecked ->
             prefs.vibrateEnable = isChecked
             notifyServiceUpdate()
@@ -265,17 +301,6 @@ class MainActivity : AppCompatActivity() {
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
-
-        btnTestVibrate.setOnClickListener {
-            val v = vibrator ?: return@setOnClickListener
-            val duration = prefs.vibrateDuration.toLong()
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                v.vibrate(VibrationEffect.createOneShot(duration, VibrationEffect.DEFAULT_AMPLITUDE))
-            } else {
-                @Suppress("DEPRECATION")
-                v.vibrate(duration)
-            }
-        }
 
         cbRingtone.setOnCheckedChangeListener { _, isChecked ->
             prefs.ringtoneEnable = isChecked
@@ -300,8 +325,25 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        btnTestBeep.setOnClickListener {
-            testBeep(prefs.beepDuration, prefs.beepVolume)
+        btnTestAll.setOnClickListener {
+            if (prefs.vibrateEnable) {
+                val v = vibrator
+                if (v != null) {
+                    val duration = prefs.vibrateDuration.toLong()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        v.vibrate(VibrationEffect.createOneShot(duration, prefs.vibrateIntensity.coerceIn(1, 255)))
+                    } else {
+                        @Suppress("DEPRECATION")
+                        v.vibrate(duration)
+                    }
+                }
+            }
+
+            if (prefs.ringtoneEnable) {
+                testBeep(prefs.beepDuration, prefs.beepVolume)
+            }
+
+            Toast.makeText(this, "⚡ 已触发提醒测试（如开启了悬浮球可观察抖动/闪烁）", Toast.LENGTH_SHORT).show()
         }
 
         cbAllowNotifStop.setOnCheckedChangeListener { _, isChecked ->
